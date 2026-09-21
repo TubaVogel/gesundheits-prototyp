@@ -75,8 +75,8 @@
   "appointments": [
     {
       "date": "22 Sep",
-      "title": "Doctolib",
-      "details": "Freie Slots sichtbar · Termin anfragen · Plattform verbunden",
+      "title": "Doctolib verbunden",
+      "details": "Angemeldet · Termine werden aus Doctolib und Kalender erkannt",
       "url": "https://www.doctolib.de/",
       "primary": true
     },
@@ -84,6 +84,12 @@
       "date": "29 Sep",
       "title": "Zahnreinigung",
       "details": "10:30 Uhr · Praxis am Park · aus Kalender erkannt",
+      "primary": false
+    },
+    {
+      "date": "06 Okt",
+      "title": "Gynäkologische Untersuchung",
+      "details": "09:15 Uhr · über Kalender übernommen",
       "primary": false
     }
   ]
