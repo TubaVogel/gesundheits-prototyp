@@ -49,29 +49,13 @@
       "id": "impfausweis",
       "title": "Impfausweis",
       "initial": "I",
-      "last": "Tetanus 9. Juni 2023",
-      "next": "Auffrischungen im Blick",
-      "status": "aktuell",
+      "last": "Noch nicht importiert",
+      "next": "Einträge lokal auf deinem Gerät speichern",
+      "status": "prüfen",
       "category": "impfausweis"
     }
   ],
-  "vaccinations": [
-    {
-      "name": "Tetanus",
-      "date": "09.06.2023",
-      "note": "2033 prüfen"
-    },
-    {
-      "name": "COVID-19",
-      "date": "18.09.2021",
-      "note": "nach Bedarf"
-    },
-    {
-      "name": "FSME",
-      "date": "14.07.2019",
-      "note": "Auffrischung prüfen"
-    }
-  ],
+  "vaccinations": [],
   "appointments": [
     {
       "date": "22 Sep",
