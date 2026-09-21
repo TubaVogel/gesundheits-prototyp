@@ -1,0 +1,89 @@
+{
+  "profiles": [
+    {
+      "id": "tuba",
+      "name": "Tuba Vogel",
+      "initials": "TV"
+    },
+    {
+      "id": "caspar",
+      "name": "Caspar Vogel",
+      "initials": "CV"
+    }
+  ],
+  "languages": [
+    { "code": "de", "label": "Deutsch", "flag": "🇩🇪" },
+    { "code": "en", "label": "English", "flag": "🇬🇧" },
+    { "code": "pt", "label": "Português", "flag": "🇵🇹" },
+    { "code": "tr", "label": "Türkçe", "flag": "🇹🇷" }
+  ],
+  "careItems": [
+    {
+      "id": "zahnreinigung",
+      "title": "Zahnreinigung",
+      "initial": "Z",
+      "last": "12. Februar 2026",
+      "next": "seit August 2026 fällig",
+      "status": "fällig",
+      "category": "vorsorge"
+    },
+    {
+      "id": "gyn",
+      "title": "Gynäkologische Untersuchung",
+      "initial": "G",
+      "last": "4. November 2025",
+      "next": "November 2026",
+      "status": "bald",
+      "category": "vorsorge"
+    },
+    {
+      "id": "krebs",
+      "title": "Krebsvorsorge",
+      "initial": "K",
+      "last": "Hautscreening 22. März 2025",
+      "next": "Darmkrebsvorsorge prüfen",
+      "status": "prüfen",
+      "category": "vorsorge"
+    },
+    {
+      "id": "impfausweis",
+      "title": "Impfausweis",
+      "initial": "I",
+      "last": "Tetanus 9. Juni 2023",
+      "next": "Auffrischungen im Blick",
+      "status": "aktuell",
+      "category": "impfausweis"
+    }
+  ],
+  "vaccinations": [
+    {
+      "name": "Tetanus",
+      "date": "09.06.2023",
+      "note": "2033 prüfen"
+    },
+    {
+      "name": "COVID-19",
+      "date": "18.09.2021",
+      "note": "nach Bedarf"
+    },
+    {
+      "name": "FSME",
+      "date": "14.07.2019",
+      "note": "Auffrischung prüfen"
+    }
+  ],
+  "appointments": [
+    {
+      "date": "22 Sep",
+      "title": "Doctolib",
+      "details": "Freie Slots sichtbar · Termin anfragen · Plattform verbunden",
+      "primary": true
+    },
+    {
+      "date": "29 Sep",
+      "title": "Zahnreinigung",
+      "details": "10:30 Uhr · Praxis am Park · aus Kalender erkannt",
+      "primary": false
+    }
+  ]
+}
