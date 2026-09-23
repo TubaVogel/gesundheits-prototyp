@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Impfausweis importieren</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1ea;color:#20241f}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px}.box{width:min(420px,100%);background:#fffdf8;border:1px solid #ddd4c4;border-radius:24px;padding:22px;box-shadow:0 18px 60px rgba(32,36,31,.14)}h1{font-size:24px;margin:0 0 10px}p{color:#697064;line-height:1.45}.button{display:block;text-align:center;border-radius:999px;background:#277465;color:white;padding:12px 16px;text-decoration:none;font-weight:800;margin-top:18px}.error{color:#9b3f33}.ok{color:#15574c}</style>
+</head>
+<body>
+  <main class="box">
+    <h1>Impfausweis importieren</h1>
+    <p id="message">Import wird vorbereitet...</p>
+    <a class="button" href="./app-reminders-20260923.html?v=after-private-import-reminders" id="openApp">Zur App</a>
+  </main>
+  <script>
+    const key = "gesundheits-prototyp-vaccinations-v1";
+    const message = document.getElementById("message");
+    function readPayload() {
+      const hash = new URLSearchParams(location.hash.slice(1));
+      return hash.get("vaccinations");
+    }
+    function decodePayload(value) {
+      const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64 + "===".slice((base64.length + 3) % 4);
+      const binary = atob(padded);
+      const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+    try {
+      const payload = readPayload();
+      if (!payload) throw new Error("missing");
+      const items = decodePayload(payload);
+      if (!Array.isArray(items)) throw new Error("invalid");
+      localStorage.setItem(key, JSON.stringify(items));
+      message.className = "ok";
+      message.textContent = `${items.length} Impfpass-Einträge wurden lokal auf diesem Gerät gespeichert. Sie sind nicht öffentlich in GitHub.`;
+    } catch (error) {
+      message.className = "error";
+      message.textContent = "Der Import-Link ist unvollständig oder konnte nicht gelesen werden.";
+    }
+  </script>
+</body>
+</html>
