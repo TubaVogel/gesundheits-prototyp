@@ -11,14 +11,14 @@
   <main class="box">
     <h1>Impfausweis importieren</h1>
     <p id="message">Import wird vorbereitet...</p>
-    <a class="button" href="./app-reminders-20260923.html?v=after-private-import-reminders" id="openApp">Zur App</a>
+    <a class="button" href="./app-reminders-20260923.html?v=after-compact-private-import" id="openApp">Zur App</a>
   </main>
   <script>
     const key = "gesundheits-prototyp-vaccinations-v1";
     const message = document.getElementById("message");
     function readPayload() {
       const hash = new URLSearchParams(location.hash.slice(1));
-      return hash.get("vaccinations");
+      return hash.get("v") || hash.get("vaccinations");
     }
     function decodePayload(value) {
       const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -27,11 +27,20 @@
       const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
       return JSON.parse(new TextDecoder().decode(bytes));
     }
+    function normalizeItems(items) {
+      if (!Array.isArray(items)) throw new Error("invalid");
+      return items.map((item, index) => ({
+        id: item.id || `private-vaccine-${index + 1}`,
+        name: item.name || item.n || "Impfung",
+        date: item.date || item.d || "Datum offen",
+        note: item.note || "",
+        source: item.source || ""
+      }));
+    }
     try {
       const payload = readPayload();
       if (!payload) throw new Error("missing");
-      const items = decodePayload(payload);
-      if (!Array.isArray(items)) throw new Error("invalid");
+      const items = normalizeItems(decodePayload(payload));
       localStorage.setItem(key, JSON.stringify(items));
       message.className = "ok";
       message.textContent = `${items.length} Impfpass-Einträge wurden lokal auf diesem Gerät gespeichert. Sie sind nicht öffentlich in GitHub.`;
