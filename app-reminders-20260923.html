@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gesundheits-Timeline</title>
+</head>
+<body>
+  <script>
+    const nextBuild = 'vaccine-reminder-years-2026-09-23';
+    const reminderFunction = `function vaccineInsight(item,all){const hay=[item.name,item.note].join(" ").toLowerCase();const parseYear=v=>{const m=String(v||"").match(/(19|20)\\d{2}$/);return m?Number(m[0]):null};const year=parseYear(item.date);const count=needle=>all.filter(x=>[x.name,x.note].join(" ").toLowerCase().includes(needle)).length;let status="Immunisierung dokumentiert",reminder="Erinnerung: bei nächstem Arzttermin Impfstatus prüfen";if(/hpv|gardasil/.test(hay)){status=count("hpv")>=3?"Immunisierung wahrscheinlich vollständig dokumentiert":"Immunisierung noch unvollständig prüfen";reminder=count("hpv")>=3?"Keine routinemäßige Auffrischung geplant":"Fehlende Dosis zeitnah ärztlich klären"}else if(/hepatitis a/.test(hay)){status=count("hepatitis a")>=2?"Grundimmunisierung dokumentiert":"Grundimmunisierung prüfen";reminder=year?\`Langzeitschutz dokumentiert; Erinnerung ${year+25} bei Reise/Risiko prüfen\`:"Langzeitschutz bei Reise/Risiko ärztlich prüfen"}else if(/hepatitis b/.test(hay)){status=count("hepatitis b")>=3?"Grundimmunisierung dokumentiert":"Grundimmunisierung prüfen";reminder="Kein fixer Auffrischtermin; bei Risiko Titer/Auffrischung ärztlich prüfen"}else if(/boostrix|tetanus|diphtherie|pertussis/.test(hay)){status="Schutz dokumentiert";reminder=year?\`Erinnerung ${year+10}: Tetanus/Diphtherie-Auffrischung prüfen\`:"Tetanus/Diphtherie im 10-Jahres-Rhythmus prüfen"}else if(/mmr|masern|mumps|roeteln|röteln/.test(hay)){status=count("mmr")>=2?"Immunisierung dokumentiert":"Immunisierung prüfen";reminder="Keine routinemäßige Auffrischung; bei unklarem Status ärztlich prüfen"}else if(/gelbfieber|stamaril/.test(hay)){status="Immunisierung dokumentiert";reminder=year?\`Zertifikat meist lebenslang; ${year+10} bei erneuter Exposition ärztlich prüfen\`:"Bei erneuter Exposition nach 10 Jahren ärztlich prüfen"}else if(/tollwut|rabipur/.test(hay)){status="Immunisierung dokumentiert";reminder=year?\`Erinnerung ${year+2}: vor Reise oder Risiko Titer/Auffrischung prüfen\`:"Vor Reise oder Risiko Titer/Auffrischung prüfen"}else if(/typh|typhim/.test(hay)){status="Reiseimpfung dokumentiert";reminder=year?\`Erinnerung ${year+3}: Typhus vor Reise prüfen\`:"Typhus vor Reise nach etwa 3 Jahren prüfen"}else if(/polio|ipv/.test(hay)){status="Immunisierung dokumentiert";reminder=year?\`Erinnerung ${year+10}: Polio bei Reise-/Expositionsrisiko prüfen\`:"Polio bei Reise-/Expositionsrisiko prüfen"}else if(/pneumo|prevenar/.test(hay)){status="Immunisierung dokumentiert";reminder="Kein fixer Termin; Bedarf abhängig von Alter/Risiko ärztlich prüfen"}else if(/covid|comirnaty/.test(hay)){status="COVID-Impfung dokumentiert";reminder="Jährlich im Herbst prüfen, falls Risiko oder aktuelle Empfehlung zutrifft"}else if(/bcg|tuberkulose/.test(hay)){status="Eintrag dokumentiert";reminder="Keine Standard-Auffrischung geplant"}return{status,reminder}}`;
+    fetch('./app-20260923.html?v=' + nextBuild)
+      .then(response => response.text())
+      .then(html => {
+        html = html.replace('health-areas-vaccine-status-2026-09-23', nextBuild);
+        html = html.replace(/function vaccineInsight\(item,all\)\{[\s\S]*?return\{status,reminder\}\}/, reminderFunction);
+        html = html.replace('data.json?v=health-areas-vaccine-status-2026-09-23', 'data.json?v=' + nextBuild);
+        document.open();
+        document.write(html);
+        document.close();
+      })
+      .catch(() => {
+        document.body.innerHTML = '<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px"><h1>App konnte nicht geladen werden</h1><p>Bitte die Seite neu laden.</p></main>';
+      });
+  </script>
+</body>
+</html>
