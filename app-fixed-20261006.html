@@ -9,16 +9,25 @@
   <title>Gesundheits-Timeline</title>
 </head>
 <body>
+  <main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;line-height:1.45">
+    <h1>Gesundheits-Timeline wird aktualisiert</h1>
+    <p>Die aktuelle Version wird geöffnet.</p>
+    <p><a id="manual-link" href="app-stable-20261006-v3.html">Aktuelle App öffnen</a></p>
+  </main>
   <script>
-    const nextBuild = 'fixed-entry-2026-10-06';
-    const storageKey = "gesundheits-prototyp-vaccinations-v1";
-    const vaccineNames = { ty:"Typhus - TYPHIM Vi", gf:"Gelbfieber - Stamaril", tw:"Tollwut - Rabipur", hpv:"HPV - Gardasil 9", po:"Polio - IPV Merieux", pn:"Pneumokokken - Prevenar 20", hb:"Hepatitis B", hbe:"Hepatitis B - Engerix-B Erwachsene", haq:"Hepatitis A - VAQTA", hah:"Hepatitis A - Havrix 1440", bcg:"BCG / Tuberkulose", mmr:"MMR - Masern, Mumps, Roeteln", dtp:"Diphtherie/Tetanus/Pertussis - Boostrix", cov:"COVID-19 - Comirnaty" };
-    function decodePayload(value){const base64=value.replace(/-/g,"+").replace(/_/g,"/");const padded=base64+"===".slice((base64.length+3)%4);const binary=atob(padded);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));return JSON.parse(new TextDecoder().decode(bytes));}
-    function normalizeItems(items){if(!Array.isArray(items))throw new Error("invalid");return items.map((item,index)=>Array.isArray(item)?{id:`private-vaccine-${index+1}`,name:vaccineNames[item[0]]||item[0]||"Impfung",date:item[1]||"Datum offen",note:"",source:""}:{id:item.id||`private-vaccine-${index+1}`,name:item.name||item.n||"Impfung",date:item.date||item.d||"Datum offen",note:item.note||"",source:item.source||""});}
-    function importFromHash(){try{const hash=new URLSearchParams(location.hash.slice(1));const payload=hash.get("c")||hash.get("v")||hash.get("vaccinations");if(!payload)return false;localStorage.setItem(storageKey,JSON.stringify(normalizeItems(decodePayload(payload))));history.replaceState(null,"",location.pathname+location.search);return true;}catch(error){return false;}}
-    function vaccineInsight(item,all){const hay=[item.name,item.note].join(" ").toLowerCase();const parseYear=value=>{const match=String(value||"").match(/(19|20)\d{2}$/);return match?Number(match[0]):null};const year=parseYear(item.date);const count=needle=>all.filter(x=>[x.name,x.note].join(" ").toLowerCase().includes(needle)).length;let status="Immunisierung dokumentiert",reminder="Erinnerung: bei nächstem Arzttermin Impfstatus prüfen";if(/hpv|gardasil/.test(hay)){status=count("hpv")>=3?"Immunisierung wahrscheinlich vollständig dokumentiert":"Immunisierung noch unvollständig prüfen";reminder=count("hpv")>=3?"Keine routinemäßige Auffrischung geplant":"Fehlende Dosis zeitnah ärztlich klären"}else if(/hepatitis a/.test(hay)){status=count("hepatitis a")>=2?"Grundimmunisierung dokumentiert":"Grundimmunisierung prüfen";reminder=year?`Langzeitschutz dokumentiert; Erinnerung ${year+25} bei Reise/Risiko prüfen`:"Langzeitschutz bei Reise/Risiko ärztlich prüfen"}else if(/hepatitis b/.test(hay)){status=count("hepatitis b")>=3?"Grundimmunisierung dokumentiert":"Grundimmunisierung prüfen";reminder="Kein fixer Auffrischtermin; bei Risiko Titer/Auffrischung ärztlich prüfen"}else if(/boostrix|tetanus|diphtherie|pertussis/.test(hay)){status="Schutz dokumentiert";reminder=year?`Erinnerung ${year+10}: Tetanus/Diphtherie-Auffrischung prüfen`:"Tetanus/Diphtherie im 10-Jahres-Rhythmus prüfen"}else if(/mmr|masern|mumps|roeteln|röteln/.test(hay)){status=count("mmr")>=2?"Immunisierung dokumentiert":"Immunisierung prüfen";reminder="Keine routinemäßige Auffrischung; bei unklarem Status ärztlich prüfen"}else if(/gelbfieber|stamaril/.test(hay)){status="Immunisierung dokumentiert";reminder=year?`Zertifikat meist lebenslang; ${year+10} bei erneuter Exposition ärztlich prüfen`:"Bei erneuter Exposition nach 10 Jahren ärztlich prüfen"}else if(/tollwut|rabipur/.test(hay)){status="Immunisierung dokumentiert";reminder=year?`Erinnerung ${year+2}: vor Reise oder Risiko Titer/Auffrischung prüfen`:"Vor Reise oder Risiko Titer/Auffrischung prüfen"}else if(/typh|typhim/.test(hay)){status="Reiseimpfung dokumentiert";reminder=year?`Erinnerung ${year+3}: Typhus vor Reise prüfen`:"Typhus vor Reise nach etwa 3 Jahren prüfen"}else if(/polio|ipv/.test(hay)){status="Immunisierung dokumentiert";reminder=year?`Erinnerung ${year+10}: Polio bei Reise-/Expositionsrisiko prüfen`:"Polio bei Reise-/Expositionsrisiko prüfen"}else if(/pneumo|prevenar/.test(hay)){status="Immunisierung dokumentiert";reminder="Kein fixer Termin; Bedarf abhängig von Alter/Risiko ärztlich prüfen"}else if(/covid|comirnaty/.test(hay)){status="COVID-Impfung dokumentiert";reminder="Jährlich im Herbst prüfen, falls Risiko oder aktuelle Empfehlung zutrifft"}else if(/bcg|tuberkulose/.test(hay)){status="Eintrag dokumentiert";reminder="Keine Standard-Auffrischung geplant"}return{status,reminder}}
-    const importedFromHash=importFromHash();
-    fetch('./app-20260923.html?v='+nextBuild,{cache:'no-store'}).then(r=>r.text()).then(html=>{html=html.replace('health-areas-vaccine-status-2026-09-23',nextBuild);html=html.replace(/function vaccineInsight\(item,all\)\{[\s\S]*?return\{status,reminder\}\}/,vaccineInsight.toString());html=html.replace('data.json?v=health-areas-vaccine-status-2026-09-23','data.json?v='+nextBuild);if(importedFromHash){html=html.replace('<p class="sub">Vorsorge, Impfausweis und Termine an einem Ort.</p>','<p class="sub">Vorsorge, Impfausweis und Termine an einem Ort. Impfpass lokal importiert.</p>')}document.open();document.write(html);document.close();}).catch(()=>{document.body.innerHTML='<main style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px"><h1>App konnte nicht geladen werden</h1><p>Bitte die Seite neu laden.</p></main>'});
+    (function () {
+      const target = new URL('app-stable-20261006-v3.html', location.href);
+      const incoming = new URLSearchParams(location.search);
+      const view = incoming.get('view') || incoming.get('tab') || '';
+      const q = incoming.get('q') || '';
+      if (view) target.searchParams.set('view', view);
+      if (q) target.searchParams.set('q', q);
+      target.searchParams.set('from', location.pathname.split('/').pop() || 'legacy');
+      target.searchParams.set('v', 'legacy-entry-replaced-20261006');
+      target.hash = location.hash;
+      document.getElementById('manual-link').href = target.href;
+      location.replace(target.href);
+    })();
   </script>
 </body>
 </html>
