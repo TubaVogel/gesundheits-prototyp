@@ -18,7 +18,7 @@
   <main>
     <h1>Gesundheits-Timeline wird aktualisiert</h1>
     <p>Die App öffnet gleich die aktuelle stabile Version.</p>
-    <p><a id="manual-link" href="app-stable-20261006-v3.html">Aktuelle App öffnen</a></p>
+    <p><a id="manual-link" href="app-stable-20261006-v3.html?v=icon-restore-20261006">Aktuelle App öffnen</a></p>
   </main>
   <script>
     (function () {
@@ -27,7 +27,7 @@
       const view = incoming.get('view') || incoming.get('tab') || '';
       if (view) target.searchParams.set('view', view);
       target.searchParams.set('from', 'main');
-      target.searchParams.set('v', 'main-replaced-20261006');
+      target.searchParams.set('v', 'icon-restore-20261006');
       target.hash = location.hash;
       document.getElementById('manual-link').href = target.href;
       location.replace(target.href);
