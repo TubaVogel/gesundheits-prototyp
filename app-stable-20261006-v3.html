@@ -28,13 +28,14 @@
         ['Zuletzt: Zahnreinigung 29. Sept. 2026 · nächste Kontrolle in 6 Monaten planen', 'Letzte Zahnreinigung: Ende September 2026 · Erinnerung: nächsten Termin für März 2027 anfragen'],
         ['Letzte Notiz: Zahnreinigung aus Kalender erkannt', 'Nächster Schritt: Termin über Doctolib oder Kalender übernehmen, sobald die Integration verbunden ist.'],
         ['<span>September 2026</span><span class="nav-btn">›</span></div><div class="date-strip"><div class="date-pill"><span>Sep</span><b>21</b></div><div class="date-pill"><span>Sep</span><b>22</b></div><div class="date-pill"><span>Sep</span><b>23</b></div><div class="date-pill"><span>Sep</span><b>24</b></div>', '<span>März 2027</span><span class="nav-btn">›</span></div><div class="date-strip"><div class="date-pill"><span>Mär</span><b>23</b></div><div class="date-pill"><span>Mär</span><b>24</b></div><div class="date-pill"><span>Mär</span><b>25</b></div><div class="date-pill"><span>Mär</span><b>26</b></div>'],
-        ['<b>Zahnreinigung</b><span>29. Sep · 10:30 Uhr · Praxis am Park · aus Kalender erkannt</span><div class="details">Praxis am Park, Musterstraße 12<br>45 Minuten · Quelle: Kalender</div>', '<b>Zahnreinigung planen</b><span>März 2027 · Erinnerung: nächsten Termin anfragen</span><div class="details">Letzte Zahnreinigung: Ende September 2026<br>Nächster Schritt: Termin über Doctolib öffnen oder aus Kalender übernehmen.</div>'],
-        ['<p><a class="link-action" href="https://www.doctolib.de/" target="_blank" rel="noopener">Öffnen</a></p>', '<p><a class="link-action" href="https://www.doctolib.de/" target="_blank" rel="noopener">Öffnen</a> · <a class="link-action" href="https://www.doctolib.de/" target="_blank" rel="noopener">Termine verbinden (optional)</a></p>'],
-        ['</script></body>', '</script>' + profileScript + '</body>']
+        ['<b>Zahnreinigung</b><span>29. Sep · 10:30 Uhr · Praxis am Park · aus Kalender erkannt</span><div class="details">Praxis am Park, Musterstraße 12<br>45 Minuten · Quelle: Kalender</div>', '<b>Zahnreinigung planen</b><span>März 2027 · Erinnerung: nächsten Termin anfragen</span><div class="details">Letzte Zahnreinigung: Ende September 2026<br>Nächster Schritt: Termin über Doctolib öffnen oder aus Kalender übernehmen.</div>']
       ];
       try {
-        let html = await fetch(stableSource + '?v=profile-language-20261007', { cache: 'no-store' }).then(r => r.text());
+        let html = await fetch(stableSource + '?v=profile-language-fix-20261007', { cache: 'no-store' }).then(r => r.text());
         replacements.forEach(([oldText, newText]) => { html = html.replace(oldText, newText); });
+        const endMarker = '<' + '/script><' + '/body>';
+        const injectedEnd = '<' + '/script>' + profileScript + '<' + '/body>';
+        html = html.replace(endMarker, injectedEnd);
         document.open();
         document.write(html);
         document.close();
