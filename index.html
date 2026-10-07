@@ -18,7 +18,7 @@
   <main>
     <h1>Gesundheits-Timeline wird aktualisiert</h1>
     <p>Die App öffnet gleich die aktuelle stabile Version.</p>
-    <p><a id="manual-link" href="app-stable-20261006-v3.html?v=profile-menu-compact-20261007">Aktuelle App öffnen</a></p>
+    <p><a id="manual-link" href="app-stable-20261006-v3.html?v=profile-menu-soft-20261007">Aktuelle App öffnen</a></p>
   </main>
   <script>
     (function () {
@@ -27,7 +27,7 @@
       const view = incoming.get('view') || incoming.get('tab') || '';
       if (view) target.searchParams.set('view', view);
       target.searchParams.set('from', 'main');
-      target.searchParams.set('v', 'profile-menu-compact-20261007');
+      target.searchParams.set('v', 'profile-menu-soft-20261007');
       target.hash = location.hash;
       document.getElementById('manual-link').href = target.href;
       location.replace(target.href);
