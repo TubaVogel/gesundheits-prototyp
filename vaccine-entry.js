@@ -42,7 +42,7 @@
   function duplicateOf(items,record,exceptId) {
     const date=isoDate(record.date), identity=vaccineIdentity(record.name);
     if(!identity || !date)return null;
-    return items.find(item=>item.id!==exceptId && String(item.profileId ?? '0')===String(record.profileId ?? '0') && isoDate(item.date)===date && vaccineIdentity(item.name)===identity) || null;
+    return items.find(item=>(exceptId==null || item.id!==exceptId) && String(item.profileId ?? '0')===String(record.profileId ?? '0') && isoDate(item.date)===date && vaccineIdentity(item.name)===identity) || null;
   }
   function mergeImport(incoming) {
     if(!Array.isArray(incoming))throw Error('Ungültiger Import');
