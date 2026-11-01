@@ -1,11 +1,12 @@
 (() => {
   'use strict';
-  const KEY = 'gesundheits-prototyp-vaccinations-v1';
+  const testing = new URLSearchParams(location.search).get('entry-test') === '1';
+  const KEY = testing ? 'health-vaccine-entry-test-v1' : 'gesundheits-prototyp-vaccinations-v1';
   const profileId = () => {
     try { return String(JSON.parse(localStorage.getItem('health-profile-v1'))?.active || 0); }
     catch { return '0'; }
   };
-  const birthKey = () => 'health-birth-date-v1-' + profileId();
+  const birthKey = () => 'health-birth-date-v1-' + (testing ? 'test-' : '') + profileId();
   function isoDate(value) {
     const s = String(value || '');
     const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s);
@@ -32,7 +33,7 @@
   let dbPromise;
   function db() {
     return dbPromise ||= new Promise((resolve, reject) => {
-      const r = indexedDB.open('health-vaccine-photos', 1);
+      const r = indexedDB.open(testing ? 'health-vaccine-photos-test' : 'health-vaccine-photos', 1);
       r.onupgradeneeded = () => r.result.createObjectStore('photos');
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => { dbPromise = null; reject(r.error); };
