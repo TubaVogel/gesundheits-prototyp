@@ -1,12 +1,30 @@
 (() => {
   'use strict';
   const testing = new URLSearchParams(location.search).get('entry-test') === '1';
-  const KEY = testing ? 'health-vaccine-entry-test-v1' : 'gesundheits-prototyp-vaccinations-v1';
+  const pilot = /\/testen\.html$/.test(location.pathname || '');
+  const KEY = pilot ? 'health-pilot-vaccinations-v1' : testing ? 'health-vaccine-entry-test-v1' : 'gesundheits-prototyp-vaccinations-v1';
   const profileId = () => {
-    try { return String(JSON.parse(localStorage.getItem('health-profile-v1'))?.active || 0); }
+    try { return String(JSON.parse(localStorage.getItem(pilot ? 'health-pilot-profile-v1' : 'health-profile-v1'))?.active || 0); }
     catch { return '0'; }
   };
-  const birthKey = () => 'health-birth-date-v1-' + (testing ? 'test-' : '') + profileId();
+  const birthKey = () => 'health-birth-date-v1-' + (pilot ? 'pilot-' : testing ? 'test-' : '') + profileId();
+  let checkingVersion=false;
+  async function checkVersion(){
+    if(checkingVersion || document.visibilityState==='hidden' || document.querySelector('dialog[open]') || !window.healthAppVersion)return;
+    checkingVersion=true;
+    try{
+      const response=await fetch('version.json?ts='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(5000)});
+      if(!response.ok)return;const version=await response.json();
+      if(version.current && version.current!==window.healthAppVersion){
+        const guard='health-version-refresh-'+(pilot?'pilot-':'main-')+version.current;
+        if(sessionStorage.getItem(guard))return;sessionStorage.setItem(guard,'1');
+        const target=new URL(location.href);target.searchParams.set('v',version.current);target.searchParams.set('refresh',Date.now());location.replace(target.href);
+      }
+    }catch{}finally{checkingVersion=false;}
+  }
+  document.addEventListener('visibilitychange',checkVersion);
+  window.addEventListener?.('pageshow',checkVersion);
+  window.addEventListener?.('focus',checkVersion);
   function isoDate(value) {
     const s = String(value || '');
     const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s);
@@ -58,9 +76,9 @@
     save(all);return {skipped,total:all.length};
   }
   window.mergeVaccineImport=mergeImport;
-  function applyPrivateUpdate() {
+  function applyPrivateUpdate(providedCode) {
     const hash = new URLSearchParams(location.hash.slice(1));
-    const code = hash.get('update'); if (!code) return;
+    const code = providedCode || hash.get('update'); if (!code) return false;
     try {
       const binary = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
       const update = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0))));
@@ -89,15 +107,28 @@
       save(all);
       if (update.birthDate) localStorage.setItem(birthKey(), update.birthDate);
       history.replaceState(null, '', location.pathname + location.search);
-    } catch { window.vaccineUpdateError = 'Die private Aktualisierung konnte nicht übernommen werden. Bestehende Daten wurden nicht ersetzt.'; }
+      return true;
+    } catch { window.vaccineUpdateError = 'Die private Aktualisierung konnte nicht übernommen werden. Bestehende Daten wurden nicht ersetzt.'; return false; }
   }
   applyPrivateUpdate();
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text) e.textContent = text; if (cls) e.className = cls; return e; };
   function button(text, fn, cls = 'action-btn') { const b = el('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
+  function importUpdate() {
+    const dialog=el('dialog','','vaccine-editor'),form=el('form');
+    form.append(el('h2','Privaten Impfstand übernehmen'));
+    const label=el('label','Aktualisierungslink oder Import-Code','entry-label'),input=el('textarea','','field');input.required=true;label.append(input);
+    const error=el('p','','entry-error');error.setAttribute('role','alert');
+    const actions=el('div','','import-actions'),submit=el('button','Übernehmen','action-btn');submit.type='submit';actions.append(button('Abbrechen',()=>dialog.close(),'action-btn secondary'),submit);
+    form.append(label,el('p','Die Korrektur wird auf diesem Gerät übernommen. Andere Impfungen bleiben erhalten.','reminder'),error,actions);
+    form.onsubmit=e=>{e.preventDefault();let code=input.value.trim();try{if(/^https?:/.test(code)){const url=new URL(code);if(url.origin!==location.origin)throw Error();code=new URLSearchParams(url.hash.slice(1)).get('update') || '';}
+      if(!code || !applyPrivateUpdate(code))throw Error();dialog.close();location.reload();
+    }catch{error.textContent='Der Link oder Code konnte nicht übernommen werden. Bitte den vollständigen privaten Aktualisierungslink einfügen.';}};
+    dialog.append(form);document.body.append(dialog);dialog.onclose=()=>dialog.remove();dialog.showModal();input.focus();
+  }
   let dbPromise;
   function db() {
     return dbPromise ||= new Promise((resolve, reject) => {
-      const r = indexedDB.open(testing ? 'health-vaccine-photos-test' : 'health-vaccine-photos', 1);
+      const r = indexedDB.open(pilot ? 'health-pilot-vaccine-photos' : testing ? 'health-vaccine-photos-test' : 'health-vaccine-photos', 1);
       r.onupgradeneeded = () => r.result.createObjectStore('photos');
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => { dbPromise = null; reject(r.error); };
@@ -318,14 +349,17 @@
     } catch { alert('Dieses Foto ist auf diesem Gerät nicht verfügbar.'); }
   }
   function boot() {
-    if (new URLSearchParams(location.search).get('view') !== 'impfausweis') return;
+    if ((new URLSearchParams(location.search).get('view') || (pilot?'impfausweis':'termine')) !== 'impfausweis') return;
     const content = document.getElementById('content'); if (!content) return;
     const tools = el('div', '', 'import-actions vaccine-entry-actions');
     tools.append(button('+ Impfung hinzufügen', () => editor()), button('Foto aufnehmen', () => editor(null, true), 'action-btn secondary'));
+    if(!pilot)tools.append(button('Daten übernehmen',importUpdate,'link-action entry-text-button'));
     content.prepend(tools);
     if(window.vaccineUpdateError)content.prepend(el('p',window.vaccineUpdateError,'entry-error'));
     let all; try { all = read(); } catch { content.append(el('p', 'Impfspeicher konnte nicht gelesen werden.', 'entry-error')); return; }
-    const invalid = all.filter(issue);
+    // The resolved legacy BCG import is repaired through the private update,
+    // rather than repeatedly asking for another photograph in a large banner.
+    const invalid = all.filter(item=>issue(item) && !(!item.entryMethod && /bcg|tuberkulose/i.test(item.name || '') && item.date==='04.10.1983'));
     if (invalid.length) {
       const section = el('section', '', 'card entry-review'); section.append(el('b', 'Datum prüfen'));
       invalid.forEach(item => { const row = el('div'); row.append(el('p', `${item.name} · ${item.date}`), el('p', issue(item)), button('Datum korrigieren', () => editor(item), 'action-btn secondary')); section.append(row); });
