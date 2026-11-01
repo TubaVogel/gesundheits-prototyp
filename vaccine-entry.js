@@ -200,10 +200,11 @@
       if (!photo || busy || !cropReady) return;
       busy = true; recognize.disabled = true; status.textContent = 'Texterkennung wird geladen …';
       try {
-        const w = await worker(status);await w.setParameters({tessedit_pageseg_mode:'11'});
-        const first=await w.recognize(preparePhoto(image,crop));
+        const w = await worker(status);await w.setParameters({tessedit_pageseg_mode:'3'});
+        const first=await w.recognize(cropPreview.src);
         let recognized=first.data.text;let found=candidates(recognized);
-        if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'6'});const second=await w.recognize(preparePhoto(image,crop,true));recognized+='\n'+second.data.text;found=candidates(recognized);}
+        if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'11'});const second=await w.recognize(preparePhoto(image,crop));recognized+='\n'+second.data.text;found=candidates(recognized);}
+        if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'6'});const third=await w.recognize(preparePhoto(image,crop,true));recognized+='\n'+third.data.text;found=candidates(recognized);}
         suggestions.replaceChildren();
         found.names.forEach(n=>suggestions.append(button('Impfstoff: '+n,()=>{name.value=n;},'action-btn secondary')));
         found.dates.forEach(d=>suggestions.append(button('Datum: '+d.split('-').reverse().join('.'),()=>{date.value=d;},'action-btn secondary')));
