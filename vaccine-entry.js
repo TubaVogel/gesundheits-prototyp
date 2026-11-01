@@ -28,6 +28,36 @@
   window.vaccineEntryIssue = issue;
   const read = () => { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(a)) throw Error('Speicherformat nicht lesbar'); return a; };
   const save = items => localStorage.setItem(KEY, JSON.stringify(items));
+  function normalizedName(value) {
+    return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  }
+  function vaccineIdentity(value) {
+    const name=normalizedName(value);
+    // Product names identify the entry; different vaccines on the same day stay separate.
+    const products=['influvac','vaxigrip','efluelda','fluad','flucelvax','boostrix','typhim vi','stamaril','rabipur','gardasil 9','engerix b','havrix','vaqta','prevenar 20','comirnaty','bcg'];
+    const found=products.filter(product=>(' '+name+' ').includes(' '+product+' '));
+    if(found.length)return found.sort().join('|');
+    return name.replace(/\b(?:impfung|impfstoff|schutzimpfung|vaccine)\b/g,' ').trim().replace(/\s+/g,' ');
+  }
+  function duplicateOf(items,record,exceptId) {
+    const date=isoDate(record.date), identity=vaccineIdentity(record.name);
+    if(!identity || !date)return null;
+    return items.find(item=>item.id!==exceptId && String(item.profileId ?? '0')===String(record.profileId ?? '0') && isoDate(item.date)===date && vaccineIdentity(item.name)===identity) || null;
+  }
+  function mergeImport(incoming) {
+    if(!Array.isArray(incoming))throw Error('Ungültiger Import');
+    const all=read();let skipped=0;
+    for(const record of incoming){
+      if(!record || typeof record.name!=='string' || !record.name.trim())throw Error('Ungültiger Impfeintrag');
+      const item={...record,profileId:String(record.profileId ?? profileId())};
+      const sameOriginal=all.find(x=>x.id===item.id && normalizedName(x.name)===normalizedName(item.name) && x.date===item.date && String(x.profileId ?? '0')===item.profileId);
+      if(sameOriginal || duplicateOf(all,item)){skipped++;continue;}
+      if(!item.id || all.some(x=>x.id===item.id))item.id=crypto.randomUUID();
+      all.push(item);
+    }
+    save(all);return {skipped,total:all.length};
+  }
+  window.mergeVaccineImport=mergeImport;
   function applyPrivateUpdate() {
     const hash = new URLSearchParams(location.hash.slice(1));
     const code = hash.get('update'); if (!code) return;
@@ -49,9 +79,12 @@
       for (const record of update.upsert) {
         if (typeof record.name !== 'string' || !record.name.trim() || !isoDate(record.date) || record.date > today()) throw Error();
         const date = record.date.split('-').reverse().join('.');
-        const existing = all.find(x => x.id === record.id || (x.name === record.name && x.date === date));
-        const item = {id:record.id || crypto.randomUUID(), name:record.name, date, batch: String(record.batch || ''), note: String(record.note || ''), entryMethod:'photo-reviewed'};
-        if (existing) Object.assign(existing, item); else all.push(item);
+        const item = {id:record.id || crypto.randomUUID(), name:record.name, date, profileId:String(record.profileId ?? profileId()), batch: String(record.batch || ''), note: String(record.note || ''), entryMethod:'photo-reviewed'};
+        const duplicate=duplicateOf(all,item);
+        if(duplicate)continue;
+        // Reusing an identifier must never overwrite a different vaccination.
+        if(all.some(x=>x.id===item.id))item.id=crypto.randomUUID();
+        all.push(item);
       }
       save(all);
       if (update.birthDate) localStorage.setItem(birthKey(), update.birthDate);
@@ -152,6 +185,13 @@
     birth.onchange = () => { date.min = birth.value; };
     const batch = field('Charge (optional)', 'text', existing?.batch || ''); batch.maxLength = 100;
     const note = field('Notiz (optional)', 'text', existing?.note || ''); note.maxLength = 1000;
+    function duplicateMessage(item){return `${item.name} vom ${item.date} ist bereits eingetragen. Bitte den vorhandenen Eintrag bearbeiten.`;}
+    function checkDuplicate(){
+      try{const duplicate=duplicateOf(read(),{name:name.value,date:date.value,profileId:existing?.profileId ?? profileId()},existing?.id);if(duplicate){error.textContent=duplicateMessage(duplicate);return duplicate;}error.textContent='';}
+      catch{error.textContent='Die vorhandenen Impfungen konnten nicht geprüft werden.';}
+      return null;
+    }
+    name.addEventListener('change',checkDuplicate);date.addEventListener('change',checkDuplicate);
     const camera = el('input'); camera.type = 'file'; camera.accept = 'image/*'; camera.setAttribute('capture', 'environment'); camera.hidden = true;
     const picker = el('input'); picker.type = 'file'; picker.accept = 'image/*'; picker.hidden = true;
     const actions = el('div', '', 'import-actions');
@@ -206,11 +246,12 @@
         if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'11'});const second=await w.recognize(preparePhoto(image,crop));recognized+='\n'+second.data.text;found=candidates(recognized);}
         if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'6'});const third=await w.recognize(preparePhoto(image,crop,true));recognized+='\n'+third.data.text;found=candidates(recognized);}
         suggestions.replaceChildren();
-        found.names.forEach(n=>suggestions.append(button('Impfstoff: '+n,()=>{name.value=n;},'action-btn secondary')));
-        found.dates.forEach(d=>suggestions.append(button('Datum: '+d.split('-').reverse().join('.'),()=>{date.value=d;},'action-btn secondary')));
+        found.names.forEach(n=>suggestions.append(button('Impfstoff: '+n,()=>{name.value=n;checkDuplicate();},'action-btn secondary')));
+        found.dates.forEach(d=>suggestions.append(button('Datum: '+d.split('-').reverse().join('.'),()=>{date.value=d;checkDuplicate();},'action-btn secondary')));
         if(found.batch)suggestions.append(button('Charge: '+found.batch,()=>{batch.value=found.batch;},'action-btn secondary'));
         if(!name.value && found.names.length===1) name.value=found.names[0];
         if(!batch.value && found.batch) batch.value=found.batch;
+        checkDuplicate();
         text.value=recognized; text.hidden=true;
         status.textContent=found.names.length||found.dates.length?'Vorschläge bitte mit dem Foto abgleichen. Handschriftliche Daten und Jahreszahlen selbst bestätigen.':'Kein verlässlicher Impfstoff oder Datum erkannt. Bitte den Ausschnitt enger wählen oder die Angaben vom Foto übertragen.';
       } catch { status.textContent = 'Texterkennung nicht verfügbar. Bitte die Angaben vom Foto in die Felder übertragen.'; }
@@ -246,12 +287,15 @@
       const iso = isoDate(date.value);
       if (!iso || iso > today() || (birth.value && iso < birth.value)) { error.textContent = 'Bitte ein gültiges Impfdatum ab dem Geburtsdatum und bis heute eingeben.'; return; }
       if (!name.value.trim()) { error.textContent = 'Bitte den Impfstoff eintragen.'; return; }
-      const record = {...(existing || {}), id: existing?.id || crypto.randomUUID(), name: name.value.trim(), date: iso.split('-').reverse().join('.'), batch: batch.value.trim(), note: note.value.trim(), entryMethod: photo ? 'photo-confirmed' : (existing?.entryMethod || 'manual'), reviewRequired: false};
+      const record = {...(existing || {}), id: existing?.id || crypto.randomUUID(), profileId:String(existing?.profileId ?? profileId()), name: name.value.trim(), date: iso.split('-').reverse().join('.'), batch: batch.value.trim(), note: note.value.trim(), entryMethod: photo ? 'photo-confirmed' : (existing?.entryMethod || 'manual'), reviewRequired: false};
       submit.disabled = true;
       try {
-        const all = read();
-        if (all.some(x => x.id !== existing?.id && x.name.toLowerCase() === record.name.toLowerCase() && x.date === record.date)) { error.textContent = 'Diese Impfung mit diesem Datum ist bereits gespeichert.'; return; }
+        let all = read();
+        let duplicate=duplicateOf(all,record,existing?.id);
+        if(duplicate){error.textContent=duplicateMessage(duplicate);return;}
         if (photo) { record.photoId = crypto.randomUUID(); await photoStore('readwrite', record.photoId, croppedPhoto); }
+        all=read();duplicate=duplicateOf(all,record,existing?.id);
+        if(duplicate){error.textContent=duplicateMessage(duplicate);return;}
         const index = existing ? all.findIndex(x => x.id === existing.id) : -1;
         if (existing && index === -1) throw Error('Eintrag wurde inzwischen verändert');
         if (index >= 0) all[index] = record; else all.push(record);
@@ -295,6 +339,6 @@
       card.append(actions);
     });
   }
-  window.vaccineEntryInternals = {isoDate, issue, candidates};
+  window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true}); else boot();
 })();
