@@ -83,7 +83,7 @@
     }
     const name = field('Impfung / Impfstoff', 'text', existing?.name || '', true); name.maxLength = 200;
     const date = field('Impfdatum', 'date', isoDate(existing?.date) || '', true); date.max = today();
-    const birth = field('Geburtsdatum für Datumsprüfung (optional)', 'date', localStorage.getItem(birthKey()) || ''); birth.max = today();
+    const birth = field('Geburtsdatum für Datumsprüfung', 'date', localStorage.getItem(birthKey()) || '', true); birth.max = today();
     if (birth.value) date.min = birth.value;
     birth.onchange = () => { date.min = birth.value; };
     const batch = field('Charge (optional)', 'text', existing?.batch || ''); batch.maxLength = 100;
