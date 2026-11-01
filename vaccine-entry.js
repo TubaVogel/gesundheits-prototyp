@@ -122,7 +122,7 @@
   }
   function preparePhoto(img, crop, threshold=false) {
     const out=document.createElement('canvas');
-    const scale=Math.min(3,2200/(img.naturalWidth*crop.w));
+    const scale=Math.min(3,2200/Math.max(img.naturalWidth*crop.w,img.naturalHeight*crop.h));
     out.width=Math.round(img.naturalWidth*crop.w*scale); out.height=Math.round(img.naturalHeight*crop.h*scale);
     const c=out.getContext('2d',{willReadFrequently:true}); c.fillStyle='#fff';c.fillRect(0,0,out.width,out.height);
     c.drawImage(img,img.naturalWidth*crop.x,img.naturalHeight*crop.y,img.naturalWidth*crop.w,img.naturalHeight*crop.h,0,0,out.width,out.height);
@@ -139,6 +139,7 @@
     const form = el('form');
     form.append(el('h2', existing ? 'Impfung bearbeiten' : 'Impfung hinzufügen'));
     let photo = null, previewUrl = null, busy = false, crop={x:0,y:0,w:1,h:1},start=null;
+    let cropChosen=false, cropReady=false, croppedPhoto=null;
     const error = el('p', '', 'entry-error'); error.setAttribute('role', 'alert');
     function field(label, type, value = '', required = false) {
       const wrap = el('label', label, 'entry-label'); const input = el('input', '', 'field');
@@ -157,22 +158,46 @@
     actions.append(button('Foto aufnehmen', () => camera.click(), 'action-btn secondary'), button('Foto auswählen', () => picker.click(), 'action-btn secondary'));
     const image = el('img', '', 'entry-preview'); image.alt = 'Foto des Impfeintrags'; image.hidden = true;
     const cropCanvas=el('canvas','','entry-crop');cropCanvas.hidden=true;cropCanvas.setAttribute('aria-label','Fotoausschnitt durch Ziehen auswählen');
-    const cropNote=el('p','Den Eintrag mit Datum und Aufkleber durch Ziehen markieren.','reminder');cropNote.hidden=true;
+    const cropNote=el('p','Nur eine Impfzeile markieren: Datum und Impfstoff-Aufkleber müssen im Rahmen liegen.','reminder');cropNote.hidden=true;
+    const cropPreview=el('img','','entry-preview');cropPreview.alt='Dieser Ausschnitt wird ausgelesen und gespeichert';cropPreview.hidden=true;
+    const previewLabel=el('b','Dieser Ausschnitt wird ausgelesen');previewLabel.hidden=true;
     function drawCrop(){
       const c=cropCanvas.getContext('2d');c.drawImage(image,0,0,cropCanvas.width,cropCanvas.height);
       c.fillStyle='rgba(0,0,0,.45)';c.fillRect(0,0,cropCanvas.width,cropCanvas.height);
+      if(!cropChosen)return;
       c.save();c.beginPath();c.rect(crop.x*cropCanvas.width,crop.y*cropCanvas.height,crop.w*cropCanvas.width,crop.h*cropCanvas.height);c.clip();c.drawImage(image,0,0,cropCanvas.width,cropCanvas.height);c.restore();
       c.strokeStyle='#00dfbd';c.lineWidth=3;c.strokeRect(crop.x*cropCanvas.width,crop.y*cropCanvas.height,crop.w*cropCanvas.width,crop.h*cropCanvas.height);
     }
     const point=e=>{const r=cropCanvas.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
-    cropCanvas.onpointerdown=e=>{if(busy)return;start=point(e);cropCanvas.setPointerCapture(e.pointerId);};
+    function invalidateCrop(){cropReady=false;croppedPhoto=null;recognize.disabled=true;cropPreview.hidden=true;previewLabel.hidden=true;suggestions.replaceChildren();checked.checked=false;}
+    function finishSelection(){start=null;cropChosen=crop.w>=.03&&crop.h>=.03;confirmCrop.disabled=!cropChosen;if(cropChosen){ranges.left.value=Math.round(crop.x*100);ranges.top.value=Math.round(crop.y*100);ranges.right.value=Math.round((crop.x+crop.w)*100);ranges.bottom.value=Math.round((crop.y+crop.h)*100);}drawCrop();}
+    cropCanvas.onpointerdown=e=>{if(busy)return;invalidateCrop();start=point(e);cropChosen=true;cropCanvas.setPointerCapture(e.pointerId);};
     cropCanvas.onpointermove=e=>{if(!start)return;const p=point(e);crop={x:Math.min(start.x,p.x),y:Math.min(start.y,p.y),w:Math.abs(start.x-p.x),h:Math.abs(start.y-p.y)};drawCrop();};
-    cropCanvas.onpointerup=()=>{start=null;if(crop.w<.03||crop.h<.03)crop=defaultCrop(image);drawCrop();};
-    const resetCrop=button('Ganzes Foto verwenden',()=>{crop={x:0,y:0,w:1,h:1};drawCrop();},'action-btn secondary');resetCrop.hidden=true;
+    cropCanvas.onpointerup=finishSelection;cropCanvas.onpointercancel=finishSelection;
+    const resetCrop=button('Ausschnitt ändern',()=>{if(busy)return;invalidateCrop();cropCanvas.hidden=false;cropNote.hidden=false;confirmCrop.hidden=false;adjust.hidden=false;resetCrop.hidden=true;},'action-btn secondary');resetCrop.hidden=true;
+    const adjust=el('details');adjust.hidden=true;adjust.append(el('summary','Ausschnitt genau einstellen'));
+    const ranges={};
+    for(const [key,label,value] of [['left','Links',0],['top','Oben',0],['right','Rechts',100],['bottom','Unten',100]]){
+      const wrap=el('label',label,'entry-label');const input=el('input');input.type='range';input.min='0';input.max='100';input.value=value;input.step='1';ranges[key]=input;wrap.append(input);adjust.append(wrap);
+      input.oninput=()=>{if(busy)return;invalidateCrop();const l=Number(ranges.left.value)/100,t=Number(ranges.top.value)/100,r=Number(ranges.right.value)/100,b=Number(ranges.bottom.value)/100;crop={x:l,y:t,w:r-l,h:b-t};finishSelection();};
+    }
+    const confirmCrop=button('Ausschnitt übernehmen',async()=>{
+      if(busy||!cropChosen)return;confirmCrop.disabled=true;
+      try{
+        const canvas=document.createElement('canvas');const scale=Math.min(1,1800/(image.naturalWidth*crop.w));
+        canvas.width=Math.round(image.naturalWidth*crop.w*scale);canvas.height=Math.round(image.naturalHeight*crop.h*scale);
+        canvas.getContext('2d').drawImage(image,image.naturalWidth*crop.x,image.naturalHeight*crop.y,image.naturalWidth*crop.w,image.naturalHeight*crop.h,0,0,canvas.width,canvas.height);
+        croppedPhoto=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error()),'image/jpeg',.94));
+        cropPreview.src=canvas.toDataURL('image/jpeg',.94);cropPreview.hidden=false;previewLabel.hidden=false;
+        cropReady=true;cropCanvas.hidden=true;cropNote.hidden=true;adjust.hidden=true;confirmCrop.hidden=true;resetCrop.hidden=false;recognize.disabled=false;
+        status.textContent='Nur dieser Ausschnitt wird ausgelesen und als Foto gespeichert.';
+      }catch{error.textContent='Der Ausschnitt konnte nicht übernommen werden. Bitte erneut markieren.';}
+      finally{confirmCrop.disabled=false;}
+    },'action-btn secondary');confirmCrop.hidden=true;confirmCrop.disabled=true;
     const suggestions=el('div','','entry-suggestions');suggestions.setAttribute('aria-live','polite');
     const status = el('p', '', 'reminder'); status.setAttribute('role', 'status');
     const recognize = button('Text aus Foto lesen', async () => {
-      if (!photo || busy) return;
+      if (!photo || busy || !cropReady) return;
       busy = true; recognize.disabled = true; status.textContent = 'Texterkennung wird geladen …';
       try {
         const w = await worker(status);await w.setParameters({tessedit_pageseg_mode:'11'});
@@ -188,7 +213,7 @@
         text.value=recognized; text.hidden=true;
         status.textContent=found.names.length||found.dates.length?'Vorschläge bitte mit dem Foto abgleichen. Handschriftliche Daten und Jahreszahlen selbst bestätigen.':'Kein verlässlicher Impfstoff oder Datum erkannt. Bitte den Ausschnitt enger wählen oder die Angaben vom Foto übertragen.';
       } catch { status.textContent = 'Texterkennung nicht verfügbar. Bitte die Angaben vom Foto in die Felder übertragen.'; }
-      finally { busy = false; recognize.disabled = false; }
+      finally { busy = false; recognize.disabled = !cropReady; }
     }, 'action-btn secondary'); recognize.hidden = true;
     const text = el('textarea', '', 'field'); text.readOnly = true; text.hidden = true; text.setAttribute('aria-label', 'Erkannter Text');
     async function selected(input) {
@@ -196,15 +221,18 @@
       if (f.size > 20 * 1024 * 1024) { error.textContent = 'Bitte ein Foto unter 20 MB auswählen.'; return; }
       if (!f.type.startsWith('image/')) { error.textContent = 'Bitte eine Bilddatei auswählen.'; return; }
       if(busy){error.textContent='Bitte warten, bis die laufende Erkennung beendet ist.';return;}
-      photo = f; error.textContent = ''; if (previewUrl) URL.revokeObjectURL(previewUrl);
+      photo = f; error.textContent = ''; invalidateCrop(); cropChosen=false; if (previewUrl) URL.revokeObjectURL(previewUrl);
       previewUrl = URL.createObjectURL(f);
-      image.onload=()=>{crop=defaultCrop(image);cropCanvas.width=700;cropCanvas.height=Math.round(image.naturalHeight*700/image.naturalWidth);cropCanvas.hidden=false;cropNote.hidden=false;resetCrop.hidden=false;recognize.hidden=false;drawCrop();};
+      image.onload=()=>{crop={x:0,y:0,w:1,h:1};cropCanvas.width=700;cropCanvas.height=Math.round(image.naturalHeight*700/image.naturalWidth);cropCanvas.hidden=false;cropNote.hidden=false;resetCrop.hidden=true;confirmCrop.hidden=false;confirmCrop.disabled=true;adjust.hidden=false;recognize.hidden=false;drawCrop();};
       image.onerror=()=>{error.textContent='Dieses Bildformat kann hier nicht gelesen werden. Bitte als JPEG oder PNG auswählen.';recognize.hidden=true;};
       image.src = previewUrl;
-      status.textContent = 'Foto bleibt auf diesem Gerät. Angaben prüfen und dann speichern.';
+      status.textContent = 'Bitte zuerst die einzelne Impfzeile markieren und den Ausschnitt übernehmen.';
     }
     camera.onchange = () => selected(camera); picker.onchange = () => selected(picker);
-    form.append(actions, camera, picker, image, cropCanvas, cropNote, resetCrop, recognize, suggestions, text, status);
+    const photoSection=el('section','','entry-photo-section');
+    photoSection.append(actions,camera,picker,image,cropNote,cropCanvas,adjust,confirmCrop,previewLabel,cropPreview,resetCrop,recognize,suggestions,text,status);
+    const photoHint=el('p','Datum und Impfstoff möglichst nah fotografieren.','reminder');photoSection.prepend(photoHint);
+    form.insertBefore(photoSection,name.parentElement);
     const checkedLabel = el('label', '', 'entry-confirm'); const checked = el('input'); checked.type = 'checkbox'; checked.required = true;
     checkedLabel.append(checked, document.createTextNode(' Impfstoff und Datum geprüft')); form.append(checkedLabel, error);
     const footer = el('div', '', 'import-actions');
@@ -213,6 +241,7 @@
     form.onsubmit = async e => {
       e.preventDefault(); if (!form.reportValidity()) return;
       error.textContent = '';
+      if(photo&&!cropReady){error.textContent='Bitte zuerst den Fotoausschnitt übernehmen.';return;}
       const iso = isoDate(date.value);
       if (!iso || iso > today() || (birth.value && iso < birth.value)) { error.textContent = 'Bitte ein gültiges Impfdatum ab dem Geburtsdatum und bis heute eingeben.'; return; }
       if (!name.value.trim()) { error.textContent = 'Bitte den Impfstoff eintragen.'; return; }
@@ -221,7 +250,7 @@
       try {
         const all = read();
         if (all.some(x => x.id !== existing?.id && x.name.toLowerCase() === record.name.toLowerCase() && x.date === record.date)) { error.textContent = 'Diese Impfung mit diesem Datum ist bereits gespeichert.'; return; }
-        if (photo) { record.photoId = crypto.randomUUID(); await photoStore('readwrite', record.photoId, photo); }
+        if (photo) { record.photoId = crypto.randomUUID(); await photoStore('readwrite', record.photoId, croppedPhoto); }
         const index = existing ? all.findIndex(x => x.id === existing.id) : -1;
         if (existing && index === -1) throw Error('Eintrag wurde inzwischen verändert');
         if (index >= 0) all[index] = record; else all.push(record);
