@@ -28,6 +28,37 @@
   window.vaccineEntryIssue = issue;
   const read = () => { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(a)) throw Error('Speicherformat nicht lesbar'); return a; };
   const save = items => localStorage.setItem(KEY, JSON.stringify(items));
+  function applyPrivateUpdate() {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    const code = hash.get('update'); if (!code) return;
+    try {
+      const binary = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
+      const update = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0))));
+      if (update.version !== 1 || !Array.isArray(update.upsert) || !Array.isArray(update.corrections)) throw Error();
+      if (update.birthDate && (!isoDate(update.birthDate) || update.birthDate > today())) throw Error();
+      const all = read();
+      for (const correction of update.corrections) {
+        if (!isoDate(correction.date)) throw Error();
+        for (const item of all) {
+          if (item.name === correction.name && item.date === correction.oldDate) {
+            item.date = correction.date.split('-').reverse().join('.');
+            item.entryMethod = 'photo-reviewed'; item.reviewRequired = false;
+          }
+        }
+      }
+      for (const record of update.upsert) {
+        if (typeof record.name !== 'string' || !record.name.trim() || !isoDate(record.date) || record.date > today()) throw Error();
+        const date = record.date.split('-').reverse().join('.');
+        const existing = all.find(x => x.id === record.id || (x.name === record.name && x.date === date));
+        const item = {id:record.id || crypto.randomUUID(), name:record.name, date, batch: String(record.batch || ''), note: String(record.note || ''), entryMethod:'photo-reviewed'};
+        if (existing) Object.assign(existing, item); else all.push(item);
+      }
+      save(all);
+      if (update.birthDate) localStorage.setItem(birthKey(), update.birthDate);
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch { window.vaccineUpdateError = 'Die private Aktualisierung konnte nicht übernommen werden. Bestehende Daten wurden nicht ersetzt.'; }
+  }
+  applyPrivateUpdate();
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text) e.textContent = text; if (cls) e.className = cls; return e; };
   function button(text, fn, cls = 'action-btn') { const b = el('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
   let dbPromise;
@@ -66,17 +97,48 @@
     return workerPromise;
   }
   function candidates(text) {
-    const names = ['Boostrix', 'TYPHIM Vi', 'Stamaril', 'Rabipur', 'Gardasil 9', 'Engerix-B', 'Havrix', 'VAQTA', 'Prevenar 20', 'Comirnaty', 'Tetanus', 'Hepatitis A', 'Hepatitis B', 'MMR', 'BCG'];
+    const names = ['Influvac', 'Vaxigrip', 'Efluelda', 'Fluad', 'Flucelvax', 'Boostrix', 'TYPHIM Vi', 'Stamaril', 'Rabipur', 'Gardasil 9', 'Engerix-B', 'Havrix', 'VAQTA', 'Prevenar 20', 'Comirnaty', 'Tetanus', 'Hepatitis A', 'Hepatitis B', 'MMR', 'BCG'];
+    const normalized = text.replace(/In[fl1I|]+uvac/gi, 'Influvac');
+    const dates = [...text.matchAll(/\b(\d{1,2})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{4}|\d{2})\b/g)].map(m => {
+      const year = m[3].length === 4 ? m[3] : (Number(m[3]) <= Number(today().slice(2,4)) ? '20' : '19') + m[3];
+      return isoDate(`${m[1].padStart(2,'0')}.${m[2].padStart(2,'0')}.${year}`);
+    }).filter(Boolean);
     return {
-      names: names.filter(n => text.toLowerCase().includes(n.toLowerCase())),
-      dates: [...new Set((text.match(/\b\d{2}[.\/-]\d{2}[.\/-]\d{4}\b/g) || []).map(d => isoDate(d.replace(/[\/-]/g, '.'))).filter(Boolean))]
+      names: names.filter(n => normalized.toLowerCase().includes(n.toLowerCase())),
+      dates: [...new Set(dates)],
+      batch: (text.match(/(?:Ch\.?\s*[-.]?\s*B\.?|Charge|Lot)\s*[:.]?\s*([A-Z0-9-]{3,20})\b/i) || [])[1] || ''
     };
+  }
+  function defaultCrop(img) {
+    const canvas = document.createElement('canvas'); canvas.width = 180; canvas.height = Math.round(img.naturalHeight * 180 / img.naturalWidth);
+    const c = canvas.getContext('2d'); c.drawImage(img,0,0,canvas.width,canvas.height);
+    const pixels = c.getImageData(0,0,canvas.width,canvas.height).data;
+    let x0=canvas.width,y0=canvas.height,x1=0,y1=0,count=0;
+    for(let y=0;y<canvas.height;y++) for(let x=0;x<canvas.width;x++) {
+      const i=(y*canvas.width+x)*4, r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+      if(r>100 && g>65 && r>b*1.45 && g>b*1.2 && r>g*.9 && r<g*2.1){x0=Math.min(x,x0);x1=Math.max(x,x1);y0=Math.min(y,y0);y1=Math.max(y,y1);count++;}
+    }
+    return count/(canvas.width*canvas.height)>.06 ? {x:x0/canvas.width,y:y0/canvas.height,w:(x1-x0+1)/canvas.width,h:(y1-y0+1)/canvas.height} : {x:0,y:0,w:1,h:1};
+  }
+  function preparePhoto(img, crop, threshold=false) {
+    const out=document.createElement('canvas');
+    const scale=Math.min(3,2200/(img.naturalWidth*crop.w));
+    out.width=Math.round(img.naturalWidth*crop.w*scale); out.height=Math.round(img.naturalHeight*crop.h*scale);
+    const c=out.getContext('2d',{willReadFrequently:true}); c.fillStyle='#fff';c.fillRect(0,0,out.width,out.height);
+    c.drawImage(img,img.naturalWidth*crop.x,img.naturalHeight*crop.y,img.naturalWidth*crop.w,img.naturalHeight*crop.h,0,0,out.width,out.height);
+    const data=c.getImageData(0,0,out.width,out.height),hist=new Uint32Array(256);
+    for(let i=0;i<data.data.length;i+=4){ const v=Math.round(.3*data.data[i]+.59*data.data[i+1]+.11*data.data[i+2]);hist[v]++; }
+    const total=out.width*out.height;let sum=0,lo=0,hi=255;
+    for(let i=0;i<256;i++){sum+=hist[i];if(sum>total*.02){lo=i;break;}}
+    sum=0;for(let i=255;i>=0;i--){sum+=hist[i];if(sum>total*.02){hi=i;break;}}
+    for(let i=0;i<data.data.length;i+=4){const v=(.3*data.data[i]+.59*data.data[i+1]+.11*data.data[i+2]-lo)*255/Math.max(1,hi-lo);const value=threshold?(v>135?255:0):v;data.data[i]=data.data[i+1]=data.data[i+2]=value;}
+    c.putImageData(data,0,0); return out;
   }
   function editor(existing = null, useCamera = false) {
     const dialog = el('dialog', '', 'vaccine-editor');
     const form = el('form');
     form.append(el('h2', existing ? 'Impfung bearbeiten' : 'Impfung hinzufügen'));
-    let photo = null, previewUrl = null, busy = false;
+    let photo = null, previewUrl = null, busy = false, crop={x:0,y:0,w:1,h:1},start=null;
     const error = el('p', '', 'entry-error'); error.setAttribute('role', 'alert');
     function field(label, type, value = '', required = false) {
       const wrap = el('label', label, 'entry-label'); const input = el('input', '', 'field');
@@ -94,17 +156,37 @@
     const actions = el('div', '', 'import-actions');
     actions.append(button('Foto aufnehmen', () => camera.click(), 'action-btn secondary'), button('Foto auswählen', () => picker.click(), 'action-btn secondary'));
     const image = el('img', '', 'entry-preview'); image.alt = 'Foto des Impfeintrags'; image.hidden = true;
+    const cropCanvas=el('canvas','','entry-crop');cropCanvas.hidden=true;cropCanvas.setAttribute('aria-label','Fotoausschnitt durch Ziehen auswählen');
+    const cropNote=el('p','Den Eintrag mit Datum und Aufkleber durch Ziehen markieren.','reminder');cropNote.hidden=true;
+    function drawCrop(){
+      const c=cropCanvas.getContext('2d');c.drawImage(image,0,0,cropCanvas.width,cropCanvas.height);
+      c.fillStyle='rgba(0,0,0,.45)';c.fillRect(0,0,cropCanvas.width,cropCanvas.height);
+      c.save();c.beginPath();c.rect(crop.x*cropCanvas.width,crop.y*cropCanvas.height,crop.w*cropCanvas.width,crop.h*cropCanvas.height);c.clip();c.drawImage(image,0,0,cropCanvas.width,cropCanvas.height);c.restore();
+      c.strokeStyle='#00dfbd';c.lineWidth=3;c.strokeRect(crop.x*cropCanvas.width,crop.y*cropCanvas.height,crop.w*cropCanvas.width,crop.h*cropCanvas.height);
+    }
+    const point=e=>{const r=cropCanvas.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
+    cropCanvas.onpointerdown=e=>{if(busy)return;start=point(e);cropCanvas.setPointerCapture(e.pointerId);};
+    cropCanvas.onpointermove=e=>{if(!start)return;const p=point(e);crop={x:Math.min(start.x,p.x),y:Math.min(start.y,p.y),w:Math.abs(start.x-p.x),h:Math.abs(start.y-p.y)};drawCrop();};
+    cropCanvas.onpointerup=()=>{start=null;if(crop.w<.03||crop.h<.03)crop=defaultCrop(image);drawCrop();};
+    const resetCrop=button('Ganzes Foto verwenden',()=>{crop={x:0,y:0,w:1,h:1};drawCrop();},'action-btn secondary');resetCrop.hidden=true;
+    const suggestions=el('div','','entry-suggestions');suggestions.setAttribute('aria-live','polite');
     const status = el('p', '', 'reminder'); status.setAttribute('role', 'status');
     const recognize = button('Text aus Foto lesen', async () => {
       if (!photo || busy) return;
       busy = true; recognize.disabled = true; status.textContent = 'Texterkennung wird geladen …';
       try {
-        const w = await worker(status); const result = await w.recognize(photo);
-        const found = candidates(result.data.text);
-        if (!name.value && found.names.length === 1) name.value = found.names[0];
-        if (!date.value && found.dates.length === 1) date.value = found.dates[0];
-        text.value = result.data.text; text.hidden = false;
-        status.textContent = 'Erkannte Angaben bitte mit dem Foto vergleichen und ergänzen. Mehrere Datumsangaben werden nicht automatisch zugeordnet.';
+        const w = await worker(status);await w.setParameters({tessedit_pageseg_mode:'11'});
+        const first=await w.recognize(preparePhoto(image,crop));
+        let recognized=first.data.text;let found=candidates(recognized);
+        if(!found.names.length){await w.setParameters({tessedit_pageseg_mode:'6'});const second=await w.recognize(preparePhoto(image,crop,true));recognized+='\n'+second.data.text;found=candidates(recognized);}
+        suggestions.replaceChildren();
+        found.names.forEach(n=>suggestions.append(button('Impfstoff: '+n,()=>{name.value=n;},'action-btn secondary')));
+        found.dates.forEach(d=>suggestions.append(button('Datum: '+d.split('-').reverse().join('.'),()=>{date.value=d;},'action-btn secondary')));
+        if(found.batch)suggestions.append(button('Charge: '+found.batch,()=>{batch.value=found.batch;},'action-btn secondary'));
+        if(!name.value && found.names.length===1) name.value=found.names[0];
+        if(!batch.value && found.batch) batch.value=found.batch;
+        text.value=recognized; text.hidden=true;
+        status.textContent=found.names.length||found.dates.length?'Vorschläge bitte mit dem Foto abgleichen. Handschriftliche Daten und Jahreszahlen selbst bestätigen.':'Kein verlässlicher Impfstoff oder Datum erkannt. Bitte den Ausschnitt enger wählen oder die Angaben vom Foto übertragen.';
       } catch { status.textContent = 'Texterkennung nicht verfügbar. Bitte die Angaben vom Foto in die Felder übertragen.'; }
       finally { busy = false; recognize.disabled = false; }
     }, 'action-btn secondary'); recognize.hidden = true;
@@ -113,12 +195,16 @@
       const f = input.files?.[0]; if (!f) return;
       if (f.size > 20 * 1024 * 1024) { error.textContent = 'Bitte ein Foto unter 20 MB auswählen.'; return; }
       if (!f.type.startsWith('image/')) { error.textContent = 'Bitte eine Bilddatei auswählen.'; return; }
+      if(busy){error.textContent='Bitte warten, bis die laufende Erkennung beendet ist.';return;}
       photo = f; error.textContent = ''; if (previewUrl) URL.revokeObjectURL(previewUrl);
-      previewUrl = URL.createObjectURL(f); image.src = previewUrl; image.hidden = false; recognize.hidden = false;
+      previewUrl = URL.createObjectURL(f);
+      image.onload=()=>{crop=defaultCrop(image);cropCanvas.width=700;cropCanvas.height=Math.round(image.naturalHeight*700/image.naturalWidth);cropCanvas.hidden=false;cropNote.hidden=false;resetCrop.hidden=false;recognize.hidden=false;drawCrop();};
+      image.onerror=()=>{error.textContent='Dieses Bildformat kann hier nicht gelesen werden. Bitte als JPEG oder PNG auswählen.';recognize.hidden=true;};
+      image.src = previewUrl;
       status.textContent = 'Foto bleibt auf diesem Gerät. Angaben prüfen und dann speichern.';
     }
     camera.onchange = () => selected(camera); picker.onchange = () => selected(picker);
-    form.append(actions, camera, picker, image, recognize, text, status);
+    form.append(actions, camera, picker, image, cropCanvas, cropNote, resetCrop, recognize, suggestions, text, status);
     const checkedLabel = el('label', '', 'entry-confirm'); const checked = el('input'); checked.type = 'checkbox'; checked.required = true;
     checkedLabel.append(checked, document.createTextNode(' Impfstoff und Datum geprüft')); form.append(checkedLabel, error);
     const footer = el('div', '', 'import-actions');
@@ -163,6 +249,7 @@
     const tools = el('div', '', 'import-actions vaccine-entry-actions');
     tools.append(button('+ Impfung hinzufügen', () => editor()), button('Foto aufnehmen', () => editor(null, true), 'action-btn secondary'));
     content.prepend(tools);
+    if(window.vaccineUpdateError)content.prepend(el('p',window.vaccineUpdateError,'entry-error'));
     let all; try { all = read(); } catch { content.append(el('p', 'Impfspeicher konnte nicht gelesen werden.', 'entry-error')); return; }
     const invalid = all.filter(issue);
     if (invalid.length) {
