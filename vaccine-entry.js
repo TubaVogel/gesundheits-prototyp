@@ -19,7 +19,7 @@
   function issue(item) {
     const date = isoDate(item.date);
     // Preserve the erroneous legacy import for correction, without guessing a replacement.
-    if (/bcg|tuberkulose/i.test(item.name || '') && /1983/.test(item.date || '')) return 'Datum aus altem Import unplausibel. Bitte am Original prüfen.';
+    if (!item.entryMethod && /bcg|tuberkulose/i.test(item.name || '') && /1983/.test(item.date || '')) return 'Datum aus altem Import unplausibel. Bitte am Original prüfen.';
     const birth = localStorage.getItem(birthKey());
     if (birth && ((date && date < birth) || (/^\d{4}$/.test(item.date) && item.date < birth.slice(0, 4)))) return 'Das Impfdatum liegt vor dem Geburtsdatum.';
     if (date && date > today()) return 'Das Impfdatum liegt in der Zukunft.';
@@ -131,7 +131,6 @@
       if (!iso || iso > today() || (birth.value && iso < birth.value)) { error.textContent = 'Bitte ein gültiges Impfdatum ab dem Geburtsdatum und bis heute eingeben.'; return; }
       if (!name.value.trim()) { error.textContent = 'Bitte den Impfstoff eintragen.'; return; }
       const record = {...(existing || {}), id: existing?.id || crypto.randomUUID(), name: name.value.trim(), date: iso.split('-').reverse().join('.'), batch: batch.value.trim(), note: note.value.trim(), entryMethod: photo ? 'photo-confirmed' : (existing?.entryMethod || 'manual'), reviewRequired: false};
-      if (/bcg|tuberkulose/i.test(record.name) && /1983/.test(record.date)) { error.textContent = 'Dieser alte Import ist unplausibel. Bitte das Datum am Original prüfen.'; return; }
       submit.disabled = true;
       try {
         const all = read();
