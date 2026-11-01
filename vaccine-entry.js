@@ -106,7 +106,7 @@
     return {
       names: names.filter(n => normalized.toLowerCase().includes(n.toLowerCase())),
       dates: [...new Set(dates)],
-      batch: (text.match(/(?:Ch\.?\s*[-.]?\s*B\.?|Charge|Lot)\s*[:.]?\s*([A-Z0-9-]{3,20})\b/i) || [])[1] || ''
+      batch: (()=>{const match=text.match(/(?:\bCh\.?\s*[-.]?\s*B\.?|\bCharge\b|\bLot\b)\s*[:.]?\s*([A-Z0-9-]{3,20})\b/i);return match && /\d/.test(match[1])?match[1]:'';})()
     };
   }
   function defaultCrop(img) {
