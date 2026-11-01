@@ -49,6 +49,7 @@
       try {
         let html = await fetch(stableSource + '?v=vaccine-entry-20261101', { cache: 'no-store' }).then(r => r.text());
         replacements.forEach(([oldText, newText]) => { html = html.replace(oldText, newText); });
+        if (incoming.get('entry-test') === '1') html = html.replace('const storageKey="gesundheits-prototyp-vaccinations-v1"', 'const storageKey="health-vaccine-entry-test-v1"');
         html = html.replace('return JSON.parse(localStorage.getItem(storageKey)||"[]")', 'return JSON.parse(localStorage.getItem(storageKey)||"[]").filter(x=>!window.vaccineEntryIssue(x))');
         html = html.replace('function insight(x,all){', 'function insight(x,all){if(x.entryMethod)return {status:"Eintrag gespeichert",reminder:"Impfstatus bei Bedarf ärztlich prüfen"};');
         html = html.replace('</head>', '<link rel="stylesheet" href="vaccine-entry.css?v=vaccine-entry-20261101"><script src="vaccine-entry.js?v=vaccine-entry-20261101"><' + '/script></head>');
