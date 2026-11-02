@@ -34,6 +34,16 @@
     return !isNaN(d) && d.toISOString().slice(0, 10) === iso ? iso : null;
   }
   const today = () => new Date().toLocaleDateString('sv-SE');
+  function influenzaVaccineInsight(item) {
+    if(!/influenza|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/i.test(item.name || ''))return null;
+    const date=isoDate(item.date);
+    if(!date)return {status:'Influenza-Impfung dokumentiert',reminder:'Vollständiges Impfdatum ergänzen, um die nächste saisonale Impfung einzuordnen.'};
+    // Winter doses belong to the season which started the previous autumn.
+    const year=Number(date.slice(0,4)),month=Number(date.slice(5,7));
+    const season=month<7?year-1:year,next=season+1;
+    return {status:`Impfung für Saison ${season}/${season+1} dokumentiert`,reminder:`Nächste saisonale Impfung: Oktober ${next} (Saison ${next}/${next+1}).`};
+  }
+  window.influenzaVaccineInsight=influenzaVaccineInsight;
   function issue(item) {
     const date = isoDate(item.date);
     // Preserve the erroneous legacy import for correction, without guessing a replacement.
@@ -368,11 +378,16 @@
     content.querySelectorAll('.vaccine-card').forEach(card => {
       const name = card.querySelector('b')?.textContent; const date = card.querySelector('span')?.textContent;
       const record = all.find(x => x.name === name && x.date === date); if (!record) return;
+      if(influenzaVaccineInsight(record)) {
+        const detail=el('details','','why');detail.append(el('summary','Warum jährlich?'));
+        detail.append(el('p','Bei fortgesetzter jährlicher Grippeimpfung ist die nächste Impfung für die folgende Saison vorgesehen. Ob sie medizinisch empfohlen ist, hängt unter anderem von Alter und Risiko ab. Der Schutz baut sich üblicherweise in etwa 10–14 Tagen auf; ein persönliches Ablaufdatum ist nicht zuverlässig bestimmbar.'));
+        const link=el('a','RKI: Influenza-Impfempfehlung','link-action');link.href='https://www.rki.de/SharedDocs/FAQs/DE/Impfen/Influenza/FAQ_Liste_Impfempfehlung.html';link.target='_blank';link.rel='noopener noreferrer';detail.append(link);card.append(detail);
+      }
       const actions = el('div', '', 'import-actions'); actions.append(button('Bearbeiten', () => editor(record), 'link-action entry-text-button'));
       if (record.photoId) actions.append(button('Foto ansehen', () => showPhoto(record.photoId), 'link-action entry-text-button'));
       card.append(actions);
     });
   }
-  window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport};
+  window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport, influenzaVaccineInsight};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true}); else boot();
 })();
