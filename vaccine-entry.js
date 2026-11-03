@@ -358,6 +358,28 @@
       dialog.onclose = () => { URL.revokeObjectURL(url); dialog.remove(); }; document.body.append(dialog); dialog.showModal();
     } catch { alert('Dieses Foto ist auf diesem Gerät nicht verfügbar.'); }
   }
+  function vaccineSearchMatches(item, query) {
+    let text=normalizedName([item.name,item.date,item.note].join(' '));
+    if (/influenza|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/.test(text)) text+=' influenza grippe';
+    return normalizedName(query).split(/\s+/).filter(Boolean).every(word=>text.includes(word));
+  }
+  function enableVaccineSearch(content, all) {
+    const input=content.querySelector('#vaccineSearch');if(!input)return;
+    const rows=Array.from(content.querySelectorAll('.vaccine-card')).map(card=>({card,record:all.find(x=>x.name===card.querySelector('b')?.textContent&&x.date===card.querySelector('span')?.textContent)}));
+    const pills=Array.from(input.parentElement.querySelectorAll('.tiny'));
+    const empty=el('p','','empty');empty.setAttribute('role','status');empty.setAttribute('aria-live','polite');content.append(empty);
+    function apply(){
+      let count=0;
+      rows.forEach(({card,record})=>{card.hidden=!record||!vaccineSearchMatches(record,input.value);if(!card.hidden)count++;});
+      content.querySelectorAll('.group').forEach(group=>{const visible=Array.from(group.querySelectorAll('.vaccine-card')).filter(card=>!card.hidden).length;group.hidden=!visible;const label=group.querySelector('.group-count');if(label)label.textContent=visible;});
+      pills.forEach(pill=>{const query=new URL(pill.href,location.href).searchParams.get('q')||'';const active=normalizedName(query)===normalizedName(input.value);pill.classList.toggle('active-filter',active);if(active)pill.setAttribute('aria-current','true');else pill.removeAttribute('aria-current');});
+      empty.hidden=count>0||rows.length===0;empty.textContent='Keine Impfungen zu dieser Suche gefunden.';
+      const url=new URL(location.href);if(input.value)url.searchParams.set('q',input.value);else url.searchParams.delete('q');history.replaceState(null,'',url.href);
+    }
+    input.addEventListener('input',apply);
+    pills.forEach(pill=>pill.addEventListener('click',event=>{if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();input.value=new URL(pill.href,location.href).searchParams.get('q')||'';apply();}));
+    apply();
+  }
   function boot() {
     if ((new URLSearchParams(location.search).get('view') || (pilot?'impfausweis':'termine')) !== 'impfausweis') return;
     const content = document.getElementById('content'); if (!content) return;
@@ -375,6 +397,7 @@
       invalid.forEach(item => { const row = el('div'); row.append(el('p', `${item.name} · ${item.date}`), el('p', issue(item)), button('Datum korrigieren', () => editor(item), 'action-btn secondary')); section.append(row); });
       tools.after(section);
     }
+    enableVaccineSearch(content, all);
     content.querySelectorAll('.vaccine-card').forEach(card => {
       const name = card.querySelector('b')?.textContent; const date = card.querySelector('span')?.textContent;
       const record = all.find(x => x.name === name && x.date === date); if (!record) return;
@@ -388,6 +411,6 @@
       card.append(actions);
     });
   }
-  window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport, influenzaVaccineInsight};
+  window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport, influenzaVaccineInsight, vaccineSearchMatches};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true}); else boot();
 })();

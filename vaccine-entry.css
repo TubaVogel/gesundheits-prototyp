@@ -9,3 +9,4 @@
 .entry-review{border-color:#c79d56}.entry-review p{margin:6px 0}.vaccine-entry-actions{margin:0 0 8px}.vaccine-editor .import-actions{gap:8px}
 .entry-crop{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;border-radius:4px}.entry-suggestions{display:flex;gap:6px;flex-wrap:wrap}.entry-suggestions:empty{display:none}
 .entry-photo-section{display:grid;gap:10px;min-width:0}.entry-photo-section p{margin:0}.entry-photo-section details{font-size:13px}.entry-photo-section details label{margin:10px 0}.entry-photo-section input[type=range]{width:100%;min-height:32px}.vaccine-editor button:disabled{opacity:.45;cursor:default}
+.vaccine-card[hidden],.group[hidden],.empty[hidden]{display:none!important}
