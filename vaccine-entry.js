@@ -147,9 +147,9 @@
   async function photoStore(mode, id, value) {
     const database = await db();
     return new Promise((resolve, reject) => {
-      const tx = database.transaction('photos', mode);
+      const tx = database.transaction('photos', mode === 'delete' ? 'readwrite' : mode);
       const store = tx.objectStore('photos');
-      const request = mode === 'readonly' ? store.get(id) : store.put(value, id);
+      const request = mode === 'readonly' ? store.get(id) : mode === 'delete' ? store.delete(id) : store.put(value, id);
       let result;
       request.onsuccess = () => { result = request.result; };
       tx.oncomplete = () => resolve(result);
@@ -208,10 +208,10 @@
     for(let i=0;i<data.data.length;i+=4){const v=(.3*data.data[i]+.59*data.data[i+1]+.11*data.data[i+2]-lo)*255/Math.max(1,hi-lo);const value=threshold?(v>135?255:0):v;data.data[i]=data.data[i+1]=data.data[i+2]=value;}
     c.putImageData(data,0,0); return out;
   }
-  function editor(existing = null, useCamera = false) {
+  function editor(existing = null, useCamera = false, options = {}) {
     const dialog = el('dialog', '', 'vaccine-editor');
     const form = el('form');
-    form.append(el('h2', existing ? 'Impfung bearbeiten' : 'Impfung hinzufügen'));
+    form.append(el('h2', options.onConfirm ? 'Impfeintrag prüfen' : existing ? 'Impfung bearbeiten' : 'Impfung hinzufügen'));
     let photo = null, previewUrl = null, busy = false, crop={x:0,y:0,w:1,h:1},start=null;
     let cropChosen=false, cropReady=false, croppedPhoto=null;
     const error = el('p', '', 'entry-error'); error.setAttribute('role', 'alert');
@@ -221,14 +221,14 @@
     }
     const name = field('Impfung / Impfstoff', 'text', existing?.name || '', true); name.maxLength = 200;
     const date = field('Impfdatum', 'date', isoDate(existing?.date) || '', true); date.max = today();
-    const birth = field('Geburtsdatum für Datumsprüfung', 'date', localStorage.getItem(birthKey()) || '', true); birth.max = today();
+    const birth = field('Geburtsdatum für Datumsprüfung', 'date', options.birthDate || localStorage.getItem(birthKey()) || '', true); birth.max = today();
     if (birth.value) date.min = birth.value;
     birth.onchange = () => { date.min = birth.value; };
     const batch = field('Charge (optional)', 'text', existing?.batch || ''); batch.maxLength = 100;
     const note = field('Notiz (optional)', 'text', existing?.note || ''); note.maxLength = 1000;
     function duplicateMessage(item){return `${item.name} vom ${item.date} ist bereits eingetragen. Bitte den vorhandenen Eintrag bearbeiten.`;}
     function checkDuplicate(){
-      try{const duplicate=duplicateOf(read(),{name:name.value,date:date.value,profileId:existing?.profileId ?? profileId()},existing?.id);if(duplicate){error.textContent=duplicateMessage(duplicate);return duplicate;}error.textContent='';}
+      try{const duplicate=duplicateOf(read(),{name:name.value,date:date.value,profileId:existing?.profileId ?? profileId()},existing?.id);if(duplicate){error.textContent=options.onConfirm?'Dieser Eintrag ist bereits vorhanden und wird beim Import übersprungen.':duplicateMessage(duplicate);return duplicate;}error.textContent='';}
       catch{error.textContent='Die vorhandenen Impfungen konnten nicht geprüft werden.';}
       return null;
     }
@@ -299,8 +299,8 @@
       finally { busy = false; recognize.disabled = !cropReady; }
     }, 'action-btn secondary'); recognize.hidden = true;
     const text = el('textarea', '', 'field'); text.readOnly = true; text.hidden = true; text.setAttribute('aria-label', 'Erkannter Text');
-    async function selected(input) {
-      const f = input.files?.[0]; if (!f) return;
+    async function selectPhoto(f) {
+      if (!f) return;
       if (f.size > 20 * 1024 * 1024) { error.textContent = 'Bitte ein Foto unter 20 MB auswählen.'; return; }
       if (!f.type.startsWith('image/')) { error.textContent = 'Bitte eine Bilddatei auswählen.'; return; }
       if(busy){error.textContent='Bitte warten, bis die laufende Erkennung beendet ist.';return;}
@@ -311,7 +311,7 @@
       image.src = previewUrl;
       status.textContent = 'Bitte zuerst die einzelne Impfzeile markieren und den Ausschnitt übernehmen.';
     }
-    camera.onchange = () => selected(camera); picker.onchange = () => selected(picker);
+    camera.onchange = () => selectPhoto(camera.files?.[0]); picker.onchange = () => selectPhoto(picker.files?.[0]);
     const photoSection=el('section','','entry-photo-section');
     photoSection.append(actions,camera,picker,image,cropNote,cropCanvas,adjust,confirmCrop,previewLabel,cropPreview,resetCrop,recognize,suggestions,text,status);
     const photoHint=el('p','Datum und Impfstoff möglichst nah fotografieren.','reminder');photoSection.prepend(photoHint);
@@ -319,16 +319,23 @@
     const checkedLabel = el('label', '', 'entry-confirm'); const checked = el('input'); checked.type = 'checkbox'; checked.required = true;
     checkedLabel.append(checked, document.createTextNode(' Impfstoff und Datum geprüft')); form.append(checkedLabel, error);
     const footer = el('div', '', 'import-actions');
-    const submit = el('button', 'Speichern', 'action-btn'); submit.type = 'submit';
+    const submit = el('button', options.onConfirm ? 'Für Import bestätigen' : 'Speichern', 'action-btn'); submit.type = 'submit';
     footer.append(button('Abbrechen', () => dialog.close(), 'action-btn secondary'), submit); form.append(footer);
     form.onsubmit = async e => {
-      e.preventDefault(); if (!form.reportValidity()) return;
+      e.preventDefault(); if (busy || !form.reportValidity()) return;
       error.textContent = '';
       if(photo&&!cropReady){error.textContent='Bitte zuerst den Fotoausschnitt übernehmen.';return;}
       const iso = isoDate(date.value);
       if (!iso || iso > today() || (birth.value && iso < birth.value)) { error.textContent = 'Bitte ein gültiges Impfdatum ab dem Geburtsdatum und bis heute eingeben.'; return; }
       if (!name.value.trim()) { error.textContent = 'Bitte den Impfstoff eintragen.'; return; }
       const record = {...(existing || {}), id: existing?.id || crypto.randomUUID(), profileId:String(existing?.profileId ?? profileId()), name: name.value.trim(), date: iso.split('-').reverse().join('.'), batch: batch.value.trim(), note: note.value.trim(), entryMethod: photo ? 'photo-confirmed' : (existing?.entryMethod || 'manual'), reviewRequired: false};
+      if (options.onConfirm) {
+        submit.disabled = true;busy=true;
+        try { await options.onConfirm(record, croppedPhoto, birth.value); dialog.close(); }
+        catch { error.textContent='Der Eintrag konnte nicht im Import vorgemerkt werden. Bitte Speicherzugriff prüfen.'; }
+        finally { submit.disabled=false;busy=false; }
+        return;
+      }
       submit.disabled = true;
       try {
         let all = read();
@@ -348,7 +355,10 @@
     };
     dialog.append(form); document.body.append(dialog);
     dialog.onclose = () => { if (previewUrl) URL.revokeObjectURL(previewUrl); dialog.remove(); };
-    dialog.showModal(); name.focus(); if (useCamera) camera.click();
+    dialog.addEventListener('cancel', e=>{if(busy)e.preventDefault();});
+    dialog.showModal(); name.focus();
+    if(options.file){actions.hidden=true;selectPhoto(options.file);}
+    if (useCamera) camera.click();
   }
   async function showPhoto(id) {
     try {
@@ -385,6 +395,7 @@
     const content = document.getElementById('content'); if (!content) return;
     const tools = el('div', '', 'import-actions vaccine-entry-actions');
     tools.append(button('+ Impfung hinzufügen', () => editor()), button('Foto aufnehmen', () => editor(null, true), 'action-btn secondary'));
+    tools.append(button('Mehrere Fotos importieren', () => window.openVaccineBatch(), 'link-action entry-text-button'));
     if(!pilot)tools.append(button('Daten übernehmen',importUpdate,'link-action entry-text-button'));
     content.prepend(tools);
     if(window.vaccineUpdateError)content.prepend(el('p',window.vaccineUpdateError,'entry-error'));
@@ -412,5 +423,6 @@
     });
   }
   window.vaccineEntryInternals = {isoDate, issue, candidates, normalizedName, vaccineIdentity, duplicateOf, mergeImport, influenzaVaccineInsight, vaccineSearchMatches};
+  window.vaccineBatchAPI = {el,button,editor,photoStore,read,save,isoDate,today,duplicateOf,profileId,birthKey,pilot,testing};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once: true}); else boot();
 })();
