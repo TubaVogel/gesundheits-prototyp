@@ -54,8 +54,17 @@
     return '';
   }
   window.vaccineEntryIssue = issue;
-  const read = () => { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(a)) throw Error('Speicherformat nicht lesbar'); return a; };
-  const save = items => localStorage.setItem(KEY, JSON.stringify(items));
+  const readAll = () => { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(a)) throw Error('Speicherformat nicht lesbar'); return a; };
+  // Legacy records without an owner belong to the original profile (Tuba).
+  const ownerOf = item => String(item.profileId ?? '0');
+  const read = () => readAll().filter(item => ownerOf(item) === profileId());
+  const save = items => {
+    const owner = profileId();
+    if (items.some(item => ownerOf(item) !== owner)) throw Error('Falsches Profil');
+    const others = readAll().filter(item => ownerOf(item) !== owner);
+    localStorage.setItem(KEY, JSON.stringify([...others, ...items]));
+  };
+  window.readProfileVaccines = read;
   function normalizedName(value) {
     return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
   }
@@ -77,7 +86,8 @@
     const all=read();let skipped=0;
     for(const record of incoming){
       if(!record || typeof record.name!=='string' || !record.name.trim())throw Error('Ungültiger Impfeintrag');
-      const item={...record,profileId:String(record.profileId ?? profileId())};
+      if(record.profileId != null && String(record.profileId)!==profileId())throw Error('Import gehört zu einem anderen Profil');
+      const item={...record,profileId:profileId()};
       const sameOriginal=all.find(x=>x.id===item.id && normalizedName(x.name)===normalizedName(item.name) && x.date===item.date && String(x.profileId ?? '0')===item.profileId);
       if(sameOriginal || duplicateOf(all,item)){skipped++;continue;}
       if(!item.id || all.some(x=>x.id===item.id))item.id=crypto.randomUUID();
@@ -209,6 +219,7 @@
     c.putImageData(data,0,0); return out;
   }
   function editor(existing = null, useCamera = false, options = {}) {
+    const editorOwner=profileId();
     const dialog = el('dialog', '', 'vaccine-editor');
     const form = el('form');
     form.append(el('h2', options.onConfirm ? 'Impfeintrag prüfen' : existing ? 'Impfung bearbeiten' : 'Impfung hinzufügen'));
@@ -236,7 +247,7 @@
     const camera = el('input'); camera.type = 'file'; camera.accept = 'image/*'; camera.setAttribute('capture', 'environment'); camera.hidden = true;
     const picker = el('input'); picker.type = 'file'; picker.accept = 'image/*'; picker.hidden = true;
     const actions = el('div', '', 'import-actions');
-    actions.append(button('Foto aufnehmen', () => camera.click(), 'action-btn secondary'), button('Foto auswählen', () => picker.click(), 'action-btn secondary'));
+    actions.append(button('Foto aufnehmen', () => camera.click(), 'action-btn secondary'), button(options.onConfirm?'Foto auswählen':'Mehrere Fotos auswählen', () => {if(options.onConfirm){picker.click();return;}dialog.close();window.openVaccineBatch();}, 'action-btn secondary'));
     const image = el('img', '', 'entry-preview'); image.alt = 'Foto des Impfeintrags'; image.hidden = true;
     const cropCanvas=el('canvas','','entry-crop');cropCanvas.hidden=true;cropCanvas.setAttribute('aria-label','Fotoausschnitt durch Ziehen auswählen');
     const cropNote=el('p','Nur eine Impfzeile markieren: Datum und Impfstoff-Aufkleber müssen im Rahmen liegen.','reminder');cropNote.hidden=true;
@@ -328,6 +339,7 @@
       const iso = isoDate(date.value);
       if (!iso || iso > today() || (birth.value && iso < birth.value)) { error.textContent = 'Bitte ein gültiges Impfdatum ab dem Geburtsdatum und bis heute eingeben.'; return; }
       if (!name.value.trim()) { error.textContent = 'Bitte den Impfstoff eintragen.'; return; }
+      if(profileId()!==editorOwner){error.textContent='Profil gewechselt. Bitte den Eintrag erneut öffnen.';return;}
       const record = {...(existing || {}), id: existing?.id || crypto.randomUUID(), profileId:String(existing?.profileId ?? profileId()), name: name.value.trim(), date: iso.split('-').reverse().join('.'), batch: batch.value.trim(), note: note.value.trim(), entryMethod: photo ? 'photo-confirmed' : (existing?.entryMethod || 'manual'), reviewRequired: false};
       if (options.onConfirm) {
         submit.disabled = true;busy=true;
