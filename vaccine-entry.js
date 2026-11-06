@@ -35,7 +35,7 @@
   }
   const today = () => new Date().toLocaleDateString('sv-SE');
   function influenzaVaccineInsight(item) {
-    if(!/influenza|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/i.test(item.name || ''))return null;
+    if(!/\binfluenza\b|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/i.test(item.name || ''))return null;
     const date=isoDate(item.date);
     if(!date)return {status:'Influenza-Impfung dokumentiert',reminder:'Vollständiges Impfdatum ergänzen, um die nächste saisonale Impfung einzuordnen.'};
     // Winter doses belong to the season which started the previous autumn.
@@ -382,7 +382,7 @@
   }
   function vaccineSearchMatches(item, query) {
     let text=normalizedName([item.name,item.date,item.note].join(' '));
-    if (/influenza|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/.test(text)) text+=' influenza grippe';
+    if (/\binfluenza\b|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/.test(text)) text+=' influenza grippe';
     return normalizedName(query).split(/\s+/).filter(Boolean).every(word=>text.includes(word));
   }
   function enableVaccineSearch(content, all) {
