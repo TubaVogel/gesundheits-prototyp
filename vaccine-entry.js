@@ -383,6 +383,16 @@
   function vaccineSearchMatches(item, query) {
     let text=normalizedName([item.name,item.date,item.note].join(' '));
     if (/\binfluenza\b|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/.test(text)) text+=' influenza grippe';
+    const aliases=[
+      [/mmr|masern|mumps|roeteln|roteln/,'measles mumps rubella sarampo papeira rubeola kızamık kabakulak kızamıkçık'],
+      [/tetanus|diphther|pertuss|boostrix|td rix/,'tetanus diphtheria pertussis tetano difteria tosse convulsa tetanos difteri boğmaca'],
+      [/tollwut|rabipur/,'rabies raiva kuduz'],[/gelbfieber|stamaril/,'yellow fever febre amarela sarı humma'],
+      [/typhus|typhim/,'typhoid febre tifoide tifo'],[/polio|ipv/,'polio poliomyelitis poliomielite çocuk felci'],
+      [/hepatitis/,'hepatitis hepatite hepatit'],[/pneumo|prevenar/,'pneumococcal pneumococo pnömokok'],
+      [/hpv|gardasil/,'hpv papillomavirus papiloma'],[/bcg|tuberkulose/,'tuberculosis tuberculose tüberküloz'],
+      [/haemophilus|hib/,'haemophilus hib'],[/\binfluenza\b|influvac|vaxigrip|efluelda|fluad|flucelvax|grippe/,'flu influenza gripe grip']
+    ];
+    for(const [pattern,words] of aliases)if(pattern.test(text))text+=' '+normalizedName(words);
     return normalizedName(query).split(/\s+/).filter(Boolean).every(word=>text.includes(word));
   }
   function enableVaccineSearch(content, all) {
